@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel ="icon" type="image/png" href="/collaborericon.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborer</title>
+    <!-- <script src="/socket.io/socket.io.js"></script> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        .playfair { font-family: 'Playfair Display', serif; }
+
+        /* Remote cursor styles */
+        .yRemoteSelection { background-color: rgba(255,0,0,0.3); }
+        .yRemoteSelectionHead {
+            position: absolute;
+            border-left: 2px solid;
+            border-top: 2px solid;
+            border-color: inherit;
+            height: 100%;
+            box-sizing: border-box;
+        }
+        .yRemoteSelectionHead::after {
+            content: attr(data-user);
+            position: absolute;
+            top: -28px;
+            left: 0px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: inherit;
+            color: white;
+            font-size: 11px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+            z-index: 9999;
+        }
+        .yRemoteSelectionHead:hover::after { opacity: 0 ; }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+        /* Input/textarea base */
+        .dark-input {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 10px;
+            color: #fff;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .dark-input::placeholder { color: rgba(255,255,255,0.3); }
+        .dark-input:focus { border-color: rgba(234,179,8,0.6); }
+
+        /* Card glass */
+        .glass-card {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.18);
+            border-radius: 20px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+
+            box-shadow:
+                0 0 20px rgba(255,239,0,0.05),
+                0 10px 40px rgba(0,0,0,0.4);
+
+        }
+
+        /* Btn primary */
+        .btn-yellow {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.25);
+            color: #fff;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
+            font-family: 'Inter', sans-serif;
+            padding: 0;
+        }
+        .btn-yellow:hover {
+            background: #FFEF00;
+            border-color: #FFEF00;
+            color: #000;
+        }
+
+        /* Logo link */
+        .logo-link {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(0, 0, 0, 0.15);
+            border: 1px solid #FFEF00;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #FFEF00;
+            font-size: 14px;
+        }
+        .logo-text {
+            font-size: 18px;
+            font-weight: 600;
+            color: #FFEF00;
+        }
+
+        /* Select styling */
+        select.dark-input {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='rgba(255,255,255,0.4)' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            padding-right: 28px;
+            cursor: pointer;
+        }
+
+        .page {
+            display: none;
+            flex-direction: column;
+            min-height: 100vh;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+            position: relative;
+        }
+        .page.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        .lang-opt {
+            padding: 8px 14px;
+            font-size: 13px;
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .lang-opt:hover {
+            background: rgba(255,255,255,0.08);
+            color: #FFEF00;
+        }
+    </style>
+</head>
+<body class="min-h-screen" style="background: radial-gradient(ellipse at 20% 50%, #0d0d1a 0%, #000000 60%, #0a0a0f 100%);">
+        <!-- Heading -->
+    <div id = 'lobbyheading' class="absolute top-16 left-1/2 -translate-x-1/2 text-center">
+        <h1
+            class="text-7xl text-[#FFEF00] font-semibold playfair tracking-wide"
+        >
+            Collaborer
+        </h1>
+
+        <p class="mt-3 text-gray-400 tracking-[3px] uppercase text-xs">
+            Real-time Collaborative Coding
+        </p>
+    </div>
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- LOBBY PAGE                                  -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="lobbyPage" class="relative page active">
+
+        <!-- Top bar -->
+        <div class="flex items-center justify-between px-10 pt-8">
+            <div class="logo-link">
+                <div class="logo-icon"><i class="fa-solid fa-code"></i></div>
+                <span class="logo-text playfair">Collaborer</span>
+            </div>
+            <a href="https://github.com/adiKr07" target="_blank"
+               class="text-white text-2xl hover:text-[#FFEF00] transition duration-200">
+                <i class="fa-brands fa-github"></i>
+            </a>
+        </div>
+
+        <!-- Main card -->
+        <div class="flex-1 flex items-center justify-center">
+            <div class="glass-card w-[820px] h-[420px] flex overflow-hidden relative">
+
+                <!-- Create side -->
+                <div class="flex-1 flex flex-col items-center justify-center gap-6">
+                    <h2 class="text-3xl text-white playfair">Create Room</h2>
+                    <button onclick="createRoom()"
+                        class="btn-yellow px-16 py-3 text-sm font-medium">
+                        Create
+                    </button>
+                </div>
+
+                <!-- Divider -->
+                <div class="w-px bg-[#FFEF00] my-10"></div>
+
+                <!-- Join side -->
+                <div class="flex-1 flex flex-col items-center justify-center gap-5">
+                    <h2 class="text-3xl text-white playfair">Join Room</h2>
+                    <input
+                        type="text"
+                        id="roomInput"
+                        placeholder="Enter room key"
+                        class="dark-input px-4 py-2.5 w-64 text-center text-sm tracking-widest uppercase hover:border-[#FFEF00]"
+                    >
+                    <button onclick="joinRoom()"
+                        class="btn-yellow px-16 py-3 text-sm font-medium">
+                        Join
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- USERNAME PAGE                               -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="usernamePage" class="page" >
+
+        <!-- Top bar -->
+        <div class="flex items-center justify-between px-10 pt-8">
+            <div class="logo-link" onclick="goHome()">
+                <div class="logo-icon"><i class="fa-solid fa-code"></i></div>
+                <span class="logo-text playfair">Collaborer</span>
+            </div>
+            <a href="https://github.com/adiKr07" target="_blank"
+               class="text-white text-2xl hover:[#FFEF00] stransition duration-200">
+                <i class="fa-brands fa-github"></i>
+            </a>
+        </div>
+
+        <!-- Main card -->
+        <div class="flex-1 flex items-center justify-center">
+            <div class="glass-card w-[420px] flex flex-col items-center gap-6 px-10 py-12">
+
+                <h2 class="text-3xl text-white playfair">Who are you?</h2>
+                <p class="text-white/40 text-sm -mt-3">Others will see this name</p>
+
+                <!-- Room key badge -->
+                <div id="roomKeyBadge"
+                     class="w-full flex items-center justify-between px-4 py-3 rounded-xl"
+                     style="background:rgba(0, 0, 0, 0.08); border:1px solid rgba(234,179,8,0.25)">
+                    <div>
+                        <div class="text-xs text-[#FFEF00] tracking-widest uppercase mb-1">Room</div>
+                        <div id="roomKeyDisplay" class="text-xl font-bold text-[#FFEF00] tracking-[4px]"></div>
+                    </div>
+                    <button onclick="copyKey()"
+                            class="text-xs text-white/50 hover:text-black btn-yellow transition px-3 py-1.5 rounded-lg">
+                        Copy
+                    </button>
+                </div>
+
+                <input
+                    type="text"
+                    id="username"
+                    placeholder="Enter username"
+                    class="dark-input w-full px-4 py-2.5 text-sm hover:border-[#FFEF00]"
+                >
+
+                <button onclick="continueToEditor()"
+                    class="btn-yellow w-full py-3 text-sm font-medium">
+                    Enter Room →
+                </button>
+
+                <p class="text-white/25 text-xs">Leave blank to join as Anonymous</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- EDITOR PAGE                                 -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="editorPage" class="page">
+
+        <!-- Top bar -->
+        <div class="flex items-center gap-4 px-6 pt-5 pb-3">
+            <!-- Logo -->
+            <div class="logo-link" onclick="goHome()">
+                <div class="logo-icon"><i class="fa-solid fa-code"></i></div>
+                <span class="logo-text playfair text-base">CollabEditor</span>
+            </div>
+
+            <!-- Room key -->
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg ml-2"
+                 style="background:rgba(164, 129, 24, 0.08); border:1px solid rgba(234,179,8,0.2)">
+                <span class="text-xs text-[#FFEF00]/40 tracking-widest uppercase">Room</span>
+                <span id="editorRoomKey" class="text-sm font-bold text-[#FFEF00] tracking-widest"></span>
+                <button onclick="copyKey()"
+                        class="text-xs text-white/40 hover:text-[#FFEF00] transition ml-1">
+                    <i class="fa-regular fa-copy"></i>
+                </button>
+            </div>
+
+            <!-- Lang select -->
+            <div class="relative" id="langDropdown">
+                <button onclick="toggleLangMenu()" 
+                    class="dark-input flex items-center gap-2 text-sm px-3 py-1.5 text-white"
+                    style="border:1px solid rgba(248,230,174,0.342); min-width: 120px;">
+                    <span id="langLabel">C++</span>
+                    <i class="fa-solid fa-chevron-down text-xs ml-auto opacity-50"></i>
+                </button>
+                <div id="langMenu" class="absolute top-full mt-1 left-0 rounded-xl overflow-hidden z-50"
+                    style="display:none; background:#1a1a1a; border:1px solid rgba(255,255,255,0.12); min-width:120px;">
+                    <div onclick="selectLang('cpp','C++')" class="lang-opt">C++</div>
+                    <div onclick="selectLang('python','Python')" class="lang-opt">Python</div>
+                    <div onclick="selectLang('java','Java')" class="lang-opt">Java</div>
+                    <div onclick="selectLang('javascript','JavaScript')" class="lang-opt">JavaScript</div>
+                </div>
+            </div>
+
+            <!-- Run button -->
+            <button onclick="submit()" id="runBtn"
+                class="border border-[#FFEF00] flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold text-black bg-[#FFEF00] hover:bg-black hover:text-white transition">
+                <i class="fa-solid fa-play text-xs"></i> Run
+            </button>
+
+            <div class="flex-1"></div>
+
+            <!-- Users -->
+            <div id="users" class="flex items-center gap-2 flex-wrap"></div>
+
+            <!-- GitHub -->
+            <a href="https://github.com/adiKr07" target="_blank"
+               class="text-white text-xl hover:text-[#FFEF00] transition ml-2">
+                <i class="fa-brands fa-github"></i>
+            </a>
+        </div>
+
+        <!-- Editor + IO layout -->
+        <div class="flex gap-4 px-6 pb-6" style="height: calc(100vh - 80px)">
+
+            <!-- Monaco editor -->
+            <div id="editor"
+                 class="flex-1 rounded-2xl overflow-hidden"
+                 style="border:1px solid rgba(255,255,255,0.08)">
+            </div>
+
+            <!-- Input / Output stack -->
+            <div class="flex flex-col gap-4" style="width: 280px">
+                <div class="glass-card flex flex-col flex-1 overflow-hidden">
+                    <div class="px-4 py-2.5 border-b" style="border-color:rgba(255,255,255,0.08)">
+                        <span class="text-xs tracking-widest uppercase text-white/30">Input</span>
+                    </div>
+                    <textarea
+                        id="input"
+                        placeholder="stdin..."
+                        class="flex-1 dark-input resize-none text-sm px-4 py-3 rounded-none rounded-b-2xl border-0"
+                        style="background:transparent; border:none;"
+                    ></textarea>
+                </div>
+
+                <div class="glass-card flex flex-col flex-1 overflow-hidden">
+                    <div class="px-4 py-2.5 border-b" style="border-color:rgba(255,255,255,0.08)">
+                        <span class="text-xs tracking-widest uppercase text-white/30">Output</span>
+                    </div>
+                    <div
+                        id="output"
+                        class="flex-1 px-4 py-3 text-sm font-mono text-green-400 overflow-auto whitespace-pre-wrap"
+                        style="min-height:0"
+                    ></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let editor;
+        let pendingRoom = null;
+        const userStyles = {};
+
+        function goHome() {
+            showPage('lobbyPage');
+        }
+
+        function showPage(id) {
+            document.getElementById('lobbyheading').style.display = 
+                id === 'lobbyPage' ? 'block' : 'none';
+            const current = document.querySelector('.page.active');
+            if (current) {
+                current.style.opacity = '0';
+                setTimeout(() => {
+                    current.classList.remove('active');
+                    current.style.opacity = '';
+                    const next = document.getElementById(id);
+                    next.classList.add('active');
+                    setTimeout(() => next.style.opacity = '1', 10);
+                }, 250);
+            } else {
+                const next = document.getElementById(id);
+                next.classList.add('active');
+                setTimeout(() => next.style.opacity = '1', 10);
+            }
+        }
+
+        function generateKey() {
+            return Math.random().toString(36).substring(2,8).toUpperCase();
+        }
+
+        function createRoom() {
+            const key = generateKey();
+            pendingRoom = key;
+            document.getElementById('roomKeyDisplay').textContent = key;
+            document.getElementById('editorRoomKey').textContent = key;
+            showPage('usernamePage');
+        }
+
+        function copyKey() {
+            navigator.clipboard.writeText(pendingRoom || '');
+        }
+
+        function joinRoom() {
+            const key = document.getElementById('roomInput').value.trim().toUpperCase();
+            if (!key) return;
+            pendingRoom = key;
+            document.getElementById('roomKeyDisplay').textContent = key;
+            document.getElementById('editorRoomKey').textContent = key;
+            showPage('usernamePage');
+        }
+
+        const adjectives = ['Swift','Brave','Calm','Eager','Fancy','Happy','Jolly','Kind','Lively','Merry','Nice','Proud','Witty','Zany','Bold','Clever','Daring','Epic','Fuzzy','Gentle'];
+        const nouns = ['Panda','Tiger','Eagle','Shark','Wolf','Falcon','Otter','Lynx','Raven','Cobra','Moose','Viper','Bison','Crane','Gecko','Husky','Iguana','Jaguar','Koala','Lemur'];
+
+        function randomName() {
+            const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+            const noun = nouns[Math.floor(Math.random() * nouns.length)];
+            return adj + noun;
+        }
+
+        function continueToEditor() {
+            const raw = document.getElementById('username').value.trim();
+            const username = raw || randomName();
+            showPage('editorPage');
+            startEditor(pendingRoom, username);
+        }
+
+        function startEditor(key, username) {
+            require.config({
+                paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }
+            });
+            function waitForGlobals(cb) {
+                if (window.Y && window.WebsocketProvider && window.MonacoBinding) return cb();
+                setTimeout(() => waitForGlobals(cb), 50);
+            }
+            
+            require(['vs/editor/editor.main'], () => {
+                
+                    monaco.editor.defineTheme('brogrammer', {
+                        base: 'vs-dark',
+                        inherit: true,
+                        rules: [
+                            { token: 'keyword', foreground: 'E06C75' },
+                            { token: 'keyword.control', foreground: 'E06C75' },
+                            { token: 'storage.type', foreground: 'E06C75' },
+                            { token: 'storage', foreground: 'E06C75' },
+                            { token: 'support.type', foreground: '56B6C2' },
+                            { token: 'entity.name.function', foreground: '61AFEF' },
+                            { token: 'variable', foreground: 'E5C07B' },
+                            { token: 'constant.numeric', foreground: 'D19A66' },
+                            { token: 'string', foreground: '98C379' },
+                            { token: 'comment', foreground: '5C6370', fontStyle: 'italic' },
+                            { token: 'type', foreground: '56B6C2' },
+                            { token: 'delimiter', foreground: 'ABB2BF' },
+                        ],
+                        colors: {
+                            'editor.background': '#1E1E1E',
+                            'editor.foreground': '#ABB2BF',
+                            'editorLineNumber.foreground': '#4B5263',
+                            'editorLineNumber.activeForeground': '#ABB2BF',
+                            'editor.selectionBackground': '#3E4451',
+                            'editor.lineHighlightBackground': '#2C313A',
+                            'editorCursor.foreground': '#528BFF',
+                        }
+                    });
+                    editor = monaco.editor.create(
+                        document.getElementById('editor'),
+                        {
+                            value: '',
+                            language: 'cpp',
+                            theme: 'brogrammer',
+                            fontSize: 14,
+                            fontFamily: '"Cascadia Code", "Fira Code", Consolas, monospace',
+                            lineHeight: 20,
+                            letterSpacing: 1,
+                            fontLigatures: true,
+                            cursorStyle: 'line-thin',        
+                            cursorBlinking: 'smooth',
+                            cursorWidth: 2,
+                            wordWrap: 'on',
+                            minimap: { enabled: false },
+                            scrollBeyondLastLine: true,
+                            padding: { top: 16 },
+                            smoothScrolling: true,
+                            tab_size: 6,
+                        }
+                    );
+                waitForGlobals(() => {
+                    const ydoc = new Y.Doc();
+                    window.sharedLang = ydoc.getMap('language');
+                        
+                    window.sharedLang.observe(() => {
+                        const lang = window.sharedLang.get('lang');
+                        if (!lang || lang === currentLang) return;
+                        currentLang = lang;
+                        const labels = { cpp:'C++', python:'Python', java:'Java', javascript:'JavaScript', typescript:'TypeScript', rust:'Rust', go:'Go' };
+                        document.getElementById('langLabel').textContent = labels[lang] || lang;
+                        if (editor) monaco.editor.setModelLanguage(editor.getModel(), lang);
+                    });
+                    const wsUrl = window.location.hostname === 'localhost' 
+                        ? 'ws://localhost:3000' 
+                        : `wss://${window.location.host}`;
+
+                    const provider = new WebsocketProvider(wsUrl, key, ydoc);
+                    provider.awareness.setLocalStateField('user', {
+                        name: username,
+                        color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6,'0')
+                    });
+
+                    provider.awareness.on('change', () => {
+                        const users = [];
+                        provider.awareness.getStates().forEach((state, clientId) => {
+                            if (state.user) {
+                                users.push({ name: state.user.name, color: state.user.color, clientId, isLocal: clientId === ydoc.clientID });
+                            }
+                        });
+
+                        // Inject per-user cursor CSS
+                        users.forEach(({ clientId, color, name }) => {
+                            if (!userStyles[clientId]) {
+                                userStyles[clientId] = true;
+                                const style = document.createElement('style');
+                                style.textContent = `
+                                    .yRemoteSelection-${clientId} { background-color: ${color}55; border-color: ${color}; }
+                                    .yRemoteSelectionHead-${clientId} { border-color: ${color}; background-color: ${color}; }
+                                    .yRemoteSelectionHead-${clientId}::after { content: "${name.replace(/"/g,'\\"')}"; background: ${color}; }
+                                `;
+                                document.head.appendChild(style);
+                            }
+                        });
+
+                        // Render user pills
+                        const usersDiv = document.getElementById('users');
+                        usersDiv.innerHTML = users.map(u => `
+                            <span style="
+                                display:inline-flex; align-items:center; gap:5px;
+                                padding:4px 10px; border-radius:20px;
+                                background:${u.color}; color:#fff;
+                                font-size:12px; font-weight:500;
+                            ">${u.isLocal ? '<span style="width:6px;height:6px;border-radius:50%;background:#fff;opacity:0.8;display:inline-block"></span>' : ''}${u.name}</span>
+                        `).join('');
+                    });
+             
+                
+
+                const yText = ydoc.getText('monaco');
+                new MonacoBinding(yText, editor.getModel(), new Set([editor]), provider.awareness);
+
+                // MutationObserver for cursor colors + smart tooltip
+                const observer = new MutationObserver(() => {
+                    provider.awareness.getStates().forEach((state, clientId) => {
+                        if (!state.user || clientId === ydoc.clientID) return;
+                        const color = state.user.color;
+                        const name = state.user.name.replace(/"/g, '\\"');
+
+                        document.querySelectorAll(`.yRemoteSelection-${clientId}`).forEach(el => {
+                            el.style.backgroundColor = color + '55';
+                            el.style.borderColor = color;
+                        });
+
+                        document.querySelectorAll(`.yRemoteSelectionHead-${clientId}`).forEach(el => {
+                            el.style.borderColor = color;
+                            el.style.backgroundColor = color;
+                            el.setAttribute('data-user', name);
+                            el.onmouseenter = null;
+                            el.onmouseenter = () => {
+                                document.querySelectorAll('.yFloatingTooltip').forEach(t => t.remove());
+                                const rect = el.getBoundingClientRect();
+                                const editorRect = document.getElementById('editor').getBoundingClientRect();
+                                const tooltip = document.createElement('div');
+                                tooltip.className = 'yFloatingTooltip';
+                                tooltip.textContent = name;
+                                tooltip.style.cssText = `
+                                    position:fixed; background:${color}; color:white;
+                                    padding:2px 8px; border-radius:4px; font-size:11px;
+                                    white-space:nowrap; z-index:99999; pointer-events:none;
+                                `;
+                                document.body.appendChild(tooltip);
+                                const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+                                let top = (rect.top - editorRect.top >= th + 4) ? rect.top - th - 4 : rect.bottom + 4;
+                                let left = rect.left;
+                                if (left + tw > editorRect.right - 4) left = editorRect.right - tw - 4;
+                                if (left < editorRect.left + 4) left = editorRect.left + 4;
+                                tooltip.style.top = top + 'px';
+                                tooltip.style.left = left + 'px';
+                            };
+                            el.onmouseleave = () => document.querySelectorAll('.yFloatingTooltip').forEach(t => t.remove());
+                        });
+                    });
+                });
+
+                observer.observe(document.getElementById('editor'), {
+                    childList: true, subtree: true, attributes: true, attributeFilter: ['class']
+                });
+
+                // document.getElementById('languages').addEventListener('change', (e) => {
+                //     monaco.editor.setModelLanguage(editor.getModel(), e.target.value);
+                // });
+                setTimeout(() => editor.layout(), 500);
+            });
+        });
+            
+        }
+        window.addEventListener('resize', () => {
+            if (editor) editor.layout();
+        });
+
+        let currentLang = 'cpp';
+
+        function toggleLangMenu() {
+            const menu = document.getElementById('langMenu');
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function selectLang(value, label) {
+            currentLang = value;
+            document.getElementById('langLabel').textContent = label;
+            document.getElementById('langMenu').style.display = 'none';
+            if (editor) monaco.editor.setModelLanguage(editor.getModel(), value);
+
+            if (window.sharedLang) window.sharedLang.set('lang', value);
+        }
+
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            if (!document.getElementById('langDropdown')?.contains(e.target)) {
+                const menu = document.getElementById('langMenu');
+                if (menu) menu.style.display = 'none';
+            }
+        });
+
+        function submit() {
+            const code = editor.getValue();
+            const input = document.getElementById('input').value;
+            const language = currentLang;
+            const output = document.getElementById('output');
+            output.textContent = 'Running...';
+            output.style.color = 'rgba(255,255,255,0.4)';
+            fetch('/run', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({code, language, input})
+            })
+            .then(r => r.json())
+            .then(data => {
+                output.textContent = data.output || data.error || data.verdict;
+                output.style.color = data.error ? '#f87171' : '#4ade80';
+            });
+        }
+    </script>
+
+    <script type="module">
+        import * as Y from 'https://esm.sh/yjs@13.6.10';
+        import { WebsocketProvider } from 'https://esm.sh/y-websocket@1.5.0?deps=yjs@13.6.10';
+        import { MonacoBinding } from 'https://esm.sh/y-monaco@0.1.6?deps=yjs@13.6.10';
+        window.Y = Y;
+        window.WebsocketProvider = WebsocketProvider;
+        window.MonacoBinding = MonacoBinding;
+    </script>
+</body>
+</html>
+

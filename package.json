@@ -1,0 +1,16 @@
+{
+  "name": "collaborer",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js",
+    "yserver": "node yserver.js"
+  },
+  "dependencies": {
+    "express": "^4.22.2",
+    "ws": "^8.21.0",
+    "y-monaco": "^0.1.6",
+    "y-websocket": "^1.5.4",
+    "yjs": "^13.6.31"
+  }
+  
+}
