@@ -6,11 +6,11 @@
     "yserver": "node yserver.js"
   },
   "dependencies": {
+    "dotenv": "^17.4.2",
     "express": "^4.22.2",
     "ws": "^8.21.0",
     "y-monaco": "^0.1.6",
     "y-websocket": "^1.5.4",
     "yjs": "^13.6.31"
   }
-  
 }
