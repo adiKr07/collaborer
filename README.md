@@ -94,9 +94,3 @@ GLOT_TOKEN=your_glot_token_here
 
 ---
 
-## Roadmap
-
-- [ ] Persistent rooms
-- [ ] File tabs within a room
-- [ ] Language selector synced across users
-- [ ] Read-only spectator mode
